@@ -1,0 +1,606 @@
+--[[
+    Ride An Egg Hub v2
+    Delta Android | Full Interactive Build
+    Anti-Detect Speed Engine
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
+
+local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
+
+-- ══════════════════════════════════════
+--  WAIT FOR CHARACTER
+-- ══════════════════════════════════════
+local Char = LP.Character or LP.CharacterAdded:Wait()
+local Hum = Char:WaitForChild("Humanoid")
+
+LP.CharacterAdded:Connect(function(c)
+    Char = c
+    Hum = c:WaitForChild("Humanoid")
+end)
+
+-- ══════════════════════════════════════
+--  SETTINGS
+-- ══════════════════════════════════════
+local Settings = {
+    MinSpeed    = 16,
+    MaxSpeed    = 80,
+    TargetSpeed = 30,
+    StepSize    = 0.5,
+    StepDelay   = 0.06,
+    Enabled     = false,
+}
+
+-- ══════════════════════════════════════
+--  ANTI-DETECT ENGINE
+-- ══════════════════════════════════════
+local Engine = {}
+Engine.Running = false
+
+function Engine:Apply(target)
+    self.Running = true
+    local current = Hum.WalkSpeed
+    local direction = target > current and 1 or -1
+    
+    while math.abs(Hum.WalkSpeed - target) > 0.5 and self.Running do
+        Hum.WalkSpeed = Hum.WalkSpeed + (Settings.StepSize * direction)
+        task.wait(Settings.StepDelay)
+    end
+    
+    if self.Running then
+        Hum.WalkSpeed = target
+    end
+end
+
+function Engine:Reset()
+    self.Running = false
+    task.spawn(function()
+        local current = Hum.WalkSpeed
+        local steps = 12
+        for i = 1, steps do
+            Hum.WalkSpeed = current - ((current - Settings.MinSpeed) / steps * i)
+            task.wait(0.04)
+        end
+        Hum.WalkSpeed = Settings.MinSpeed
+    end)
+end
+
+-- Watchdog
+RunService.Heartbeat:Connect(function()
+    if Settings.Enabled and Hum then
+        local diff = Settings.TargetSpeed - Hum.WalkSpeed
+        if math.abs(diff) > 1.5 then
+            Hum.WalkSpeed = Hum.WalkSpeed + (diff * 0.25)
+        end
+    end
+end)
+
+-- ══════════════════════════════════════
+--  GUI SETUP
+-- ══════════════════════════════════════
+-- تنظيف أي نسخ قديمة
+pcall(function()
+    if game:GetService("CoreGui"):FindFirstChild("EggHub") then
+        game:GetService("CoreGui"):FindFirstChild("EggHub"):Destroy()
+    end
+end)
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "EggHub"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.IgnoreGuiInset = true
+
+pcall(function()
+    ScreenGui.Parent = game:GetService("CoreGui")
+end)
+if not ScreenGui.Parent or ScreenGui.Parent ~= game:GetService("CoreGui") then
+    ScreenGui.Parent = LP.PlayerGui
+end
+
+-- ══════════════════════════════════════
+--  MAIN FRAME
+-- ══════════════════════════════════════
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.new(0, 270, 0, 300)
+Main.Position = UDim2.new(0, 30, 0, 120)
+Main.BackgroundColor3 = Color3.fromRGB(8, 8, 16)
+Main.BorderSizePixel = 0
+Main.ClipsDescendants = false
+Main.Parent = ScreenGui
+
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 16)
+
+-- Shadow
+local Shadow = Instance.new("ImageLabel")
+Shadow.Name = "Shadow"
+Shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+Shadow.BackgroundTransparency = 1
+Shadow.Position = UDim2.new(0.5, 0, 0.5, 8)
+Shadow.Size = UDim2.new(1, 40, 1, 40)
+Shadow.ZIndex = -1
+Shadow.Image = "rbxassetid://6014261993"
+Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+Shadow.ImageTransparency = 0.5
+Shadow.ScaleType = Enum.ScaleType.Slice
+Shadow.SliceCenter = Rect.new(49, 49, 450, 450)
+Shadow.Parent = Main
+
+-- Top Gradient Bar
+local TopGrad = Instance.new("Frame")
+TopGrad.Size = UDim2.new(1, 0, 0, 4)
+TopGrad.BackgroundColor3 = Color3.fromRGB(130, 80, 255)
+TopGrad.BorderSizePixel = 0
+TopGrad.Parent = Main
+Instance.new("UICorner", TopGrad).CornerRadius = UDim.new(0, 16)
+
+local TG = Instance.new("UIGradient")
+TG.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(130, 80, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 80, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 160)),
+})
+TG.Parent = TopGrad
+
+-- ══════════════════════════════════════
+--  DRAG SYSTEM (حقيقي يشتغل على الموبايل)
+-- ══════════════════════════════════════
+local DragBar = Instance.new("TextButton")
+DragBar.Name = "DragBar"
+DragBar.Size = UDim2.new(1, 0, 0, 50)
+DragBar.Position = UDim2.new(0, 0, 0, 0)
+DragBar.BackgroundTransparency = 1
+DragBar.Text = ""
+DragBar.ZIndex = 10
+DragBar.Parent = Main
+
+local dragging = false
+local dragStartPos = Vector2.new()
+local frameStartPos = UDim2.new()
+
+DragBar.TouchStarted:Connect(function(touch)
+    dragging = true
+    dragStartPos = Vector2.new(touch.Position.X, touch.Position.Y)
+    frameStartPos = Main.Position
+end)
+
+DragBar.TouchEnded:Connect(function()
+    dragging = false
+end)
+
+UIS.TouchMoved:Connect(function(touch)
+    if dragging then
+        local delta = Vector2.new(
+            touch.Position.X - dragStartPos.X,
+            touch.Position.Y - dragStartPos.Y
+        )
+        Main.Position = UDim2.new(
+            frameStartPos.X.Scale,
+            frameStartPos.X.Offset + delta.X,
+            frameStartPos.Y.Scale,
+            frameStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- Drag بالماوس للـ PC أيضاً
+DragBar.MouseButton1Down:Connect(function()
+    dragging = true
+    dragStartPos = Vector2.new(Mouse.X, Mouse.Y)
+    frameStartPos = Main.Position
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = Vector2.new(
+            Mouse.X - dragStartPos.X,
+            Mouse.Y - dragStartPos.Y
+        )
+        Main.Position = UDim2.new(
+            frameStartPos.X.Scale,
+            frameStartPos.X.Offset + delta.X,
+            frameStartPos.Y.Scale,
+            frameStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- ══════════════════════════════════════
+--  HEADER
+-- ══════════════════════════════════════
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -60, 0, 30)
+TitleLabel.Position = UDim2.new(0, 14, 0, 10)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "🥚  EGG HUB"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 16
+TitleLabel.Font = Enum.Font.GothamBlack
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = Main
+
+local VersionLabel = Instance.new("TextLabel")
+VersionLabel.Size = UDim2.new(1, -14, 0, 14)
+VersionLabel.Position = UDim2.new(0, 14, 0, 34)
+VersionLabel.BackgroundTransparency = 1
+VersionLabel.Text = "v2.0 • stealth build • delta android"
+VersionLabel.TextColor3 = Color3.fromRGB(130, 80, 255)
+VersionLabel.TextSize = 9
+VersionLabel.Font = Enum.Font.GothamSemibold
+VersionLabel.TextXAlignment = Enum.TextXAlignment.Left
+VersionLabel.Parent = Main
+
+-- Minimize / Close Buttons
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 28, 0, 28)
+MinBtn.Position = UDim2.new(1, -64, 0, 11)
+MinBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+MinBtn.Text = "−"
+MinBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
+MinBtn.TextSize = 18
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.BorderSizePixel = 0
+MinBtn.ZIndex = 11
+MinBtn.Parent = Main
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 8)
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 28, 0, 28)
+CloseBtn.Position = UDim2.new(1, -32, 0, 11)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 60)
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 13
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.BorderSizePixel = 0
+CloseBtn.ZIndex = 11
+CloseBtn.Parent = Main
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 8)
+
+-- ══════════════════════════════════════
+--  CONTENT FRAME (للتصغير)
+-- ══════════════════════════════════════
+local Content = Instance.new("Frame")
+Content.Name = "Content"
+Content.Size = UDim2.new(1, 0, 1, -52)
+Content.Position = UDim2.new(0, 0, 0, 52)
+Content.BackgroundTransparency = 1
+Content.ClipsDescendants = true
+Content.Parent = Main
+
+-- ══════════════════════════════════════
+--  STATUS BOX
+-- ══════════════════════════════════════
+local StatusBox = Instance.new("Frame")
+StatusBox.Size = UDim2.new(1, -24, 0, 40)
+StatusBox.Position = UDim2.new(0, 12, 0, 8)
+StatusBox.BackgroundColor3 = Color3.fromRGB(16, 16, 28)
+StatusBox.BorderSizePixel = 0
+StatusBox.Parent = Content
+Instance.new("UICorner", StatusBox).CornerRadius = UDim.new(0, 10)
+
+local StatusDot = Instance.new("Frame")
+StatusDot.Size = UDim2.new(0, 9, 0, 9)
+StatusDot.Position = UDim2.new(0, 12, 0.5, -4)
+StatusDot.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+StatusDot.BorderSizePixel = 0
+StatusDot.Parent = StatusBox
+Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(1, 0)
+
+local StatusTxt = Instance.new("TextLabel")
+StatusTxt.Size = UDim2.new(1, -35, 1, 0)
+StatusTxt.Position = UDim2.new(0, 30, 0, 0)
+StatusTxt.BackgroundTransparency = 1
+StatusTxt.Text = "OFFLINE  —  16 studs/s"
+StatusTxt.TextColor3 = Color3.fromRGB(160, 160, 180)
+StatusTxt.TextSize = 11
+StatusTxt.Font = Enum.Font.GothamSemibold
+StatusTxt.TextXAlignment = Enum.TextXAlignment.Left
+StatusTxt.Parent = StatusBox
+
+-- ══════════════════════════════════════
+--  SPEED TOGGLE BUTTON
+-- ══════════════════════════════════════
+local SpeedToggle = Instance.new("TextButton")
+SpeedToggle.Size = UDim2.new(1, -24, 0, 48)
+SpeedToggle.Position = UDim2.new(0, 12, 0, 58)
+SpeedToggle.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+SpeedToggle.Text = ""
+SpeedToggle.BorderSizePixel = 0
+SpeedToggle.AutoButtonColor = false
+SpeedToggle.Parent = Content
+Instance.new("UICorner", SpeedToggle).CornerRadius = UDim.new(0, 12)
+
+local ToggleBG = Instance.new("UIGradient")
+ToggleBG.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(28, 28, 45)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 18, 30)),
+})
+ToggleBG.Parent = SpeedToggle
+
+local ToggleIcon = Instance.new("TextLabel")
+ToggleIcon.Size = UDim2.new(0, 40, 1, 0)
+ToggleIcon.Position = UDim2.new(0, 10, 0, 0)
+ToggleIcon.BackgroundTransparency = 1
+ToggleIcon.Text = "⚡"
+ToggleIcon.TextSize = 22
+ToggleIcon.Font = Enum.Font.GothamBold
+ToggleIcon.Parent = SpeedToggle
+
+local ToggleLabel = Instance.new("TextLabel")
+ToggleLabel.Size = UDim2.new(1, -90, 1, 0)
+ToggleLabel.Position = UDim2.new(0, 52, 0, 0)
+ToggleLabel.BackgroundTransparency = 1
+ToggleLabel.Text = "SPEED BOOST"
+ToggleLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+ToggleLabel.TextSize = 13
+ToggleLabel.Font = Enum.Font.GothamBold
+ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+ToggleLabel.Parent = SpeedToggle
+
+local ToggleState = Instance.new("TextLabel")
+ToggleState.Size = UDim2.new(0, 40, 0, 22)
+ToggleState.Position = UDim2.new(1, -50, 0.5, -11)
+ToggleState.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+ToggleState.Text = "OFF"
+ToggleState.TextColor3 = Color3.fromRGB(140, 140, 160)
+ToggleState.TextSize = 10
+ToggleState.Font = Enum.Font.GothamBold
+ToggleState.Parent = SpeedToggle
+Instance.new("UICorner", ToggleState).CornerRadius = UDim.new(0, 6)
+
+-- ══════════════════════════════════════
+--  SPEED SLIDER
+-- ══════════════════════════════════════
+local SliderSection = Instance.new("Frame")
+SliderSection.Size = UDim2.new(1, -24, 0, 70)
+SliderSection.Position = UDim2.new(0, 12, 0, 118)
+SliderSection.BackgroundColor3 = Color3.fromRGB(16, 16, 28)
+SliderSection.BorderSizePixel = 0
+SliderSection.Parent = Content
+Instance.new("UICorner", SliderSection).CornerRadius = UDim.new(0, 10)
+
+local SliderTitle = Instance.new("TextLabel")
+SliderTitle.Size = UDim2.new(1, -16, 0, 20)
+SliderTitle.Position = UDim2.new(0, 12, 0, 8)
+SliderTitle.BackgroundTransparency = 1
+SliderTitle.Text = "SPEED VALUE"
+SliderTitle.TextColor3 = Color3.fromRGB(130, 80, 255)
+SliderTitle.TextSize = 10
+SliderTitle.Font = Enum.Font.GothamBold
+SliderTitle.TextXAlignment = Enum.TextXAlignment.Left
+SliderTitle.Parent = SliderSection
+
+local SpeedNum = Instance.new("TextLabel")
+SpeedNum.Size = UDim2.new(0, 50, 0, 20)
+SpeedNum.Position = UDim2.new(1, -62, 0, 8)
+SpeedNum.BackgroundTransparency = 1
+SpeedNum.Text = "30"
+SpeedNum.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedNum.TextSize = 13
+SpeedNum.Font = Enum.Font.GothamBlack
+SpeedNum.TextXAlignment = Enum.TextXAlignment.Right
+SpeedNum.Parent = SliderSection
+
+-- Track
+local Track = Instance.new("Frame")
+Track.Size = UDim2.new(1, -24, 0, 8)
+Track.Position = UDim2.new(0, 12, 0, 36)
+Track.BackgroundColor3 = Color3.fromRGB(28, 28, 45)
+Track.BorderSizePixel = 0
+Track.Parent = SliderSection
+Instance.new("UICorner", Track).CornerRadius = UDim.new(1, 0)
+
+local Fill = Instance.new("Frame")
+Fill.Size = UDim2.new(0.22, 0, 1, 0)
+Fill.BackgroundColor3 = Color3.fromRGB(130, 80, 255)
+Fill.BorderSizePixel = 0
+Fill.Parent = Track
+Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
+
+local FillGrad = Instance.new("UIGradient")
+FillGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(130, 80, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 180)),
+})
+FillGrad.Parent = Fill
+
+local Handle = Instance.new("Frame")
+Handle.Size = UDim2.new(0, 22, 0, 22)
+Handle.Position = UDim2.new(0.22, -11, 0.5, -11)
+Handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Handle.BorderSizePixel = 0
+Handle.ZIndex = 5
+Handle.Parent = Track
+Instance.new("UICorner", Handle).CornerRadius = UDim.new(1, 0)
+
+local HandleInner = Instance.new("Frame")
+HandleInner.Size = UDim2.new(0, 10, 0, 10)
+HandleInner.Position = UDim2.new(0.5, -5, 0.5, -5)
+HandleInner.BackgroundColor3 = Color3.fromRGB(130, 80, 255)
+HandleInner.BorderSizePixel = 0
+HandleInner.Parent = Handle
+Instance.new("UICorner", HandleInner).CornerRadius = UDim.new(1, 0)
+
+-- Min / Max labels
+local MinLbl = Instance.new("TextLabel")
+MinLbl.Size = UDim2.new(0, 30, 0, 14)
+MinLbl.Position = UDim2.new(0, 12, 0, 50)
+MinLbl.BackgroundTransparency = 1
+MinLbl.Text = "16"
+MinLbl.TextColor3 = Color3.fromRGB(80, 80, 100)
+MinLbl.TextSize = 9
+MinLbl.Font = Enum.Font.Gotham
+MinLbl.TextXAlignment = Enum.TextXAlignment.Left
+MinLbl.Parent = SliderSection
+
+local MaxLbl = Instance.new("TextLabel")
+MaxLbl.Size = UDim2.new(0, 30, 0, 14)
+MaxLbl.Position = UDim2.new(1, -42, 0, 50)
+MaxLbl.BackgroundTransparency = 1
+MaxLbl.Text = "80"
+MaxLbl.TextColor3 = Color3.fromRGB(80, 80, 100)
+MaxLbl.TextSize = 9
+MaxLbl.Font = Enum.Font.Gotham
+MaxLbl.TextXAlignment = Enum.TextXAlignment.Right
+MaxLbl.Parent = SliderSection
+
+-- ══════════════════════════════════════
+--  SLIDER LOGIC (حقيقي للموبايل)
+-- ══════════════════════════════════════
+local sliderDragging = false
+
+local function updateSlider(inputX)
+    local trackPos = Track.AbsolutePosition.X
+    local trackSize = Track.AbsoluteSize.X
+    local relX = math.clamp((inputX - trackPos) / trackSize, 0, 1)
+    
+    Fill.Size = UDim2.new(relX, 0, 1, 0)
+    Handle.Position = UDim2.new(relX, -11, 0.5, -11)
+    
+    local speed = math.floor(Settings.MinSpeed + relX * (Settings.MaxSpeed - Settings.MinSpeed))
+    Settings.TargetSpeed = speed
+    SpeedNum.Text = tostring(speed)
+    
+    if Settings.Enabled then
+        Hum.WalkSpeed = speed
+        StatusTxt.Text = "ACTIVE  —  " .. speed .. " studs/s"
+    end
+end
+
+Track.TouchStarted:Connect(function(touch)
+    sliderDragging = true
+    updateSlider(touch.Position.X)
+end)
+
+Handle.TouchStarted:Connect(function(touch)
+    sliderDragging = true
+end)
+
+Track.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        sliderDragging = true
+        updateSlider(Mouse.X)
+    end
+end)
+
+UIS.TouchMoved:Connect(function(touch)
+    if sliderDragging then
+        updateSlider(touch.Position.X)
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if sliderDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        updateSlider(Mouse.X)
+    end
+end)
+
+UIS.TouchEnded:Connect(function()
+    sliderDragging = false
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        sliderDragging = false
+    end
+end)
+
+-- ══════════════════════════════════════
+--  TOGGLE LOGIC
+-- ══════════════════════════════════════
+SpeedToggle.Activated:Connect(function()
+    Settings.Enabled = not Settings.Enabled
+    
+    if Settings.Enabled then
+        -- ON
+        ToggleState.Text = "ON"
+        ToggleState.TextColor3 = Color3.fromRGB(80, 255, 120)
+        ToggleState.BackgroundColor3 = Color3.fromRGB(20, 60, 30)
+        ToggleLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
+        StatusDot.BackgroundColor3 = Color3.fromRGB(80, 255, 120)
+        StatusTxt.Text = "ACTIVE  —  " .. Settings.TargetSpeed .. " studs/s"
+        
+        TweenService:Create(SpeedToggle, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(20, 50, 30)
+        }):Play()
+        
+        Engine.Running = false
+        task.wait(0.05)
+        task.spawn(function()
+            Engine:Apply(Settings.TargetSpeed)
+        end)
+    else
+        -- OFF
+        ToggleState.Text = "OFF"
+        ToggleState.TextColor3 = Color3.fromRGB(140, 140, 160)
+        ToggleState.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+        ToggleLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+        StatusDot.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+        StatusTxt.Text = "OFFLINE  —  16 studs/s"
+        
+        TweenService:Create(SpeedToggle, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+        }):Play()
+        
+        Engine:Reset()
+    end
+end)
+
+-- ══════════════════════════════════════
+--  MINIMIZE LOGIC
+-- ══════════════════════════════════════
+local isMin = false
+
+MinBtn.Activated:Connect(function()
+    isMin = not isMin
+    if isMin then
+        TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quart), {
+            Size = UDim2.new(0, 270, 0, 52)
+        }):Play()
+        MinBtn.Text = "□"
+    else
+        TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quart), {
+            Size = UDim2.new(0, 270, 0, 300)
+        }):Play()
+        MinBtn.Text = "−"
+    end
+end)
+
+-- ══════════════════════════════════════
+--  CLOSE
+-- ══════════════════════════════════════
+CloseBtn.Activated:Connect(function()
+    Settings.Enabled = false
+    Engine:Reset()
+    task.wait(0.3)
+    ScreenGui:Destroy()
+end)
+
+-- ══════════════════════════════════════
+--  CHARACTER RESPAWN
+-- ══════════════════════════════════════
+LP.CharacterAdded:Connect(function(c)
+    Char = c
+    Hum = c:WaitForChild("Humanoid")
+    
+    if Settings.Enabled then
+        task.wait(1.5)
+        task.spawn(function()
+            Engine:Apply(Settings.TargetSpeed)
+        end)
+    end
+end)
+
+print("[EggHub v2] Ready — Delta Android")
