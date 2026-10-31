@@ -1,0 +1,451 @@
+-- Ride An Egg | Speed Script
+-- Delta Android Compatible
+-- Anti-Detection Build
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local hum = char:WaitForChild("Humanoid")
+
+-- ═══════════════════════════
+--   CONFIG
+-- ═══════════════════════════
+local CFG = {
+    TargetSpeed   = 28,     -- سرعتك المستهدفة
+    DefaultSpeed  = 16,     -- سرعة الماب الافتراضية
+    StepSize      = 0.4,    -- حجم الخطوة (كلما صغر كلما صعب الكشف)
+    StepDelay     = 0.08,   -- تأخير بين كل خطوة
+    ResetOnDeath  = true,
+    SpoofValue    = 16,     -- القيمة المرئية للسيرفر
+}
+
+-- ═══════════════════════════
+--   ANTI-DETECT ENGINE
+-- ═══════════════════════════
+local AntiDetect = {}
+AntiDetect.Active = false
+AntiDetect.CurrentSpeed = CFG.DefaultSpeed
+
+-- تسريع تدريجي بدل القفز المباشر
+function AntiDetect:RampUp(target)
+    self.Active = true
+    local current = hum.WalkSpeed
+    local steps = math.floor((target - current) / CFG.StepSize)
+    
+    for i = 1, steps do
+        if not self.Active then break end
+        hum.WalkSpeed = current + (CFG.StepSize * i)
+        task.wait(CFG.StepDelay)
+    end
+    hum.WalkSpeed = target
+    self.CurrentSpeed = target
+end
+
+function AntiDetect:RampDown()
+    self.Active = false
+    local current = hum.WalkSpeed
+    local steps = math.floor((current - CFG.DefaultSpeed) / CFG.StepSize)
+    
+    for i = 1, steps do
+        hum.WalkSpeed = current - (CFG.StepSize * i)
+        task.wait(CFG.StepDelay / 2)
+    end
+    hum.WalkSpeed = CFG.DefaultSpeed
+    self.CurrentSpeed = CFG.DefaultSpeed
+end
+
+-- حماية من الـ property watchers
+local mt = getrawmetatable and getrawmetatable(game)
+if mt then
+    local old_index = mt.__index
+    local old_newindex = mt.__newindex
+    
+    local success = pcall(function()
+        setreadonly(mt, false)
+        mt.__newindex = function(t, k, v)
+            if k == "WalkSpeed" then
+                -- أرسل للسيرفر القيمة الافتراضية
+                return old_newindex(t, k, CFG.SpoofValue)
+            end
+            return old_newindex(t, k, v)
+        end
+        setreadonly(mt, true)
+    end)
+end
+
+-- ═══════════════════════════
+--   CHARACTER HANDLER
+-- ═══════════════════════════
+local function onCharacter(newChar)
+    char = newChar
+    hum = char:WaitForChild("Humanoid")
+    
+    if CFG.ResetOnDeath then
+        hum.Died:Connect(function()
+            AntiDetect.Active = false
+            AntiDetect.CurrentSpeed = CFG.DefaultSpeed
+        end)
+    end
+    
+    -- أعد تطبيق السرعة بعد الموت
+    player.CharacterAdded:Connect(function(c)
+        task.wait(1.5)
+        if AntiDetect.Active then
+            char = c
+            hum = c:WaitForChild("Humanoid")
+            AntiDetect:RampUp(CFG.TargetSpeed)
+        end
+    end)
+end
+
+player.CharacterAdded:Connect(onCharacter)
+
+-- ═══════════════════════════
+--   GUI
+-- ═══════════════════════════
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "RideEggHub"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- تفادي الكشف بتغيير اسم الـ GUI
+pcall(function()
+    screenGui.Parent = game:GetService("CoreGui")
+end)
+if not screenGui.Parent then
+    screenGui.Parent = player.PlayerGui
+end
+
+-- الإطار الرئيسي
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 260, 0, 320)
+MainFrame.Position = UDim2.new(0, 20, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 18)
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = screenGui
+
+-- زوايا مستديرة
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 14)
+Corner.Parent = MainFrame
+
+-- خط علوي ملون
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 3)
+TopBar.Position = UDim2.new(0, 0, 0, 0)
+TopBar.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
+
+local TopGradient = Instance.new("UIGradient")
+TopGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 80, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 180)),
+})
+TopGradient.Parent = TopBar
+
+-- Header
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 50)
+Header.Position = UDim2.new(0, 0, 0, 3)
+Header.BackgroundTransparency = 1
+Header.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -20, 1, 0)
+Title.Position = UDim2.new(0, 16, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "🥚 Ride An Egg Hub"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 15
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
+
+local SubTitle = Instance.new("TextLabel")
+SubTitle.Size = UDim2.new(1, -20, 0, 16)
+SubTitle.Position = UDim2.new(0, 16, 0, 30)
+SubTitle.BackgroundTransparency = 1
+SubTitle.Text = "by dotbhai • stealth build"
+SubTitle.TextColor3 = Color3.fromRGB(120, 80, 255)
+SubTitle.TextSize = 10
+SubTitle.Font = Enum.Font.Gotham
+SubTitle.TextXAlignment = Enum.TextXAlignment.Left
+SubTitle.Parent = MainFrame
+
+-- ─────────────────────────
+-- Status Badge
+-- ─────────────────────────
+local StatusBadge = Instance.new("Frame")
+StatusBadge.Size = UDim2.new(1, -32, 0, 36)
+StatusBadge.Position = UDim2.new(0, 16, 0, 58)
+StatusBadge.BackgroundColor3 = Color3.fromRGB(20, 20, 32)
+StatusBadge.BorderSizePixel = 0
+StatusBadge.Parent = MainFrame
+
+local BadgeCorner = Instance.new("UICorner")
+BadgeCorner.CornerRadius = UDim.new(0, 8)
+BadgeCorner.Parent = StatusBadge
+
+local StatusDot = Instance.new("Frame")
+StatusDot.Size = UDim2.new(0, 8, 0, 8)
+StatusDot.Position = UDim2.new(0, 12, 0.5, -4)
+StatusDot.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+StatusDot.BorderSizePixel = 0
+StatusDot.Parent = StatusBadge
+
+local DotCorner = Instance.new("UICorner")
+DotCorner.CornerRadius = UDim.new(1, 0)
+DotCorner.Parent = StatusDot
+
+local StatusText = Instance.new("TextLabel")
+StatusText.Size = UDim2.new(1, -35, 1, 0)
+StatusText.Position = UDim2.new(0, 28, 0, 0)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "Speed: OFF  •  16 studs/s"
+StatusText.TextColor3 = Color3.fromRGB(180, 180, 200)
+StatusText.TextSize = 11
+StatusText.Font = Enum.Font.GothamSemibold
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.Parent = StatusBadge
+
+-- ─────────────────────────
+-- Speed Slider Label
+-- ─────────────────────────
+local SliderLabel = Instance.new("TextLabel")
+SliderLabel.Size = UDim2.new(1, -32, 0, 20)
+SliderLabel.Position = UDim2.new(0, 16, 0, 106)
+SliderLabel.BackgroundTransparency = 1
+SliderLabel.Text = "TARGET SPEED"
+SliderLabel.TextColor3 = Color3.fromRGB(120, 80, 255)
+SliderLabel.TextSize = 10
+SliderLabel.Font = Enum.Font.GothamBold
+SliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+SliderLabel.Parent = MainFrame
+
+local SpeedValue = Instance.new("TextLabel")
+SpeedValue.Size = UDim2.new(0, 50, 0, 20)
+SpeedValue.Position = UDim2.new(1, -66, 0, 106)
+SpeedValue.BackgroundTransparency = 1
+SpeedValue.Text = tostring(CFG.TargetSpeed)
+SpeedValue.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedValue.TextSize = 12
+SpeedValue.Font = Enum.Font.GothamBold
+SpeedValue.TextXAlignment = Enum.TextXAlignment.Right
+SpeedValue.Parent = MainFrame
+
+-- Slider Track
+local SliderTrack = Instance.new("Frame")
+SliderTrack.Size = UDim2.new(1, -32, 0, 6)
+SliderTrack.Position = UDim2.new(0, 16, 0, 132)
+SliderTrack.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+SliderTrack.BorderSizePixel = 0
+SliderTrack.Parent = MainFrame
+
+local TrackCorner = Instance.new("UICorner")
+TrackCorner.CornerRadius = UDim.new(1, 0)
+TrackCorner.Parent = SliderTrack
+
+local SliderFill = Instance.new("Frame")
+SliderFill.Size = UDim2.new(0.4, 0, 1, 0)
+SliderFill.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
+SliderFill.BorderSizePixel = 0
+SliderFill.Parent = SliderTrack
+
+local FillCorner = Instance.new("UICorner")
+FillCorner.CornerRadius = UDim.new(1, 0)
+FillCorner.Parent = SliderFill
+
+local SliderHandle = Instance.new("TextButton")
+SliderHandle.Size = UDim2.new(0, 18, 0, 18)
+SliderHandle.Position = UDim2.new(0.4, -9, 0.5, -9)
+SliderHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+SliderHandle.Text = ""
+SliderHandle.BorderSizePixel = 0
+SliderHandle.Parent = SliderTrack
+
+local HandleCorner = Instance.new("UICorner")
+HandleCorner.CornerRadius = UDim.new(1, 0)
+HandleCorner.Parent = SliderHandle
+
+-- Slider Logic
+local dragging = false
+local minSpeed, maxSpeed = 16, 60
+
+SliderHandle.TouchStarted:Connect(function()
+    dragging = true
+end)
+
+SliderHandle.TouchEnded:Connect(function()
+    dragging = false
+end)
+
+UserInputService.TouchMoved:Connect(function(touch)
+    if dragging then
+        local trackPos = SliderTrack.AbsolutePosition.X
+        local trackSize = SliderTrack.AbsoluteSize.X
+        local relX = math.clamp((touch.Position.X - trackPos) / trackSize, 0, 1)
+        
+        SliderFill.Size = UDim2.new(relX, 0, 1, 0)
+        SliderHandle.Position = UDim2.new(relX, -9, 0.5, -9)
+        
+        CFG.TargetSpeed = math.floor(minSpeed + relX * (maxSpeed - minSpeed))
+        SpeedValue.Text = tostring(CFG.TargetSpeed)
+        
+        if AntiDetect.Active then
+            hum.WalkSpeed = CFG.TargetSpeed
+            AntiDetect.CurrentSpeed = CFG.TargetSpeed
+        end
+    end
+end)
+
+-- ─────────────────────────
+-- Toggle Button
+-- ─────────────────────────
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(1, -32, 0, 44)
+ToggleBtn.Position = UDim2.new(0, 16, 0, 154)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+ToggleBtn.Text = ""
+ToggleBtn.BorderSizePixel = 0
+ToggleBtn.AutoButtonColor = false
+ToggleBtn.Parent = MainFrame
+
+local TBCorner = Instance.new("UICorner")
+TBCorner.CornerRadius = UDim.new(0, 10)
+TBCorner.Parent = ToggleBtn
+
+local ToggleGrad = Instance.new("UIGradient")
+ToggleGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 35, 55)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 40)),
+})
+ToggleGrad.Parent = ToggleBtn
+
+local ToggleText = Instance.new("TextLabel")
+ToggleText.Size = UDim2.new(1, 0, 1, 0)
+ToggleText.BackgroundTransparency = 1
+ToggleText.Text = "⚡ ENABLE SPEED"
+ToggleText.TextColor3 = Color3.fromRGB(200, 200, 220)
+ToggleText.TextSize = 13
+ToggleText.Font = Enum.Font.GothamBold
+ToggleText.Parent = ToggleBtn
+
+local speedEnabled = false
+
+ToggleBtn.Activated:Connect(function()
+    speedEnabled = not speedEnabled
+    
+    if speedEnabled then
+        -- تفعيل
+        ToggleText.Text = "⚡ SPEED: ON"
+        ToggleText.TextColor3 = Color3.fromRGB(120, 255, 150)
+        ToggleGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 80, 50)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 60, 35)),
+        })
+        StatusDot.BackgroundColor3 = Color3.fromRGB(80, 255, 120)
+        StatusText.Text = "Speed: ON  •  " .. CFG.TargetSpeed .. " studs/s"
+        
+        -- تسريع تدريجي
+        task.spawn(function()
+            AntiDetect:RampUp(CFG.TargetSpeed)
+        end)
+    else
+        -- تعطيل
+        ToggleText.Text = "⚡ ENABLE SPEED"
+        ToggleText.TextColor3 = Color3.fromRGB(200, 200, 220)
+        ToggleGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 35, 55)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 40)),
+        })
+        StatusDot.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        StatusText.Text = "Speed: OFF  •  16 studs/s"
+        
+        task.spawn(function()
+            AntiDetect:RampDown()
+        end)
+    end
+end)
+
+-- ─────────────────────────
+-- Minimize Button
+-- ─────────────────────────
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(1, -32, 0, 32)
+MinBtn.Position = UDim2.new(0, 16, 0, 210)
+MinBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+MinBtn.Text = "— MINIMIZE"
+MinBtn.TextColor3 = Color3.fromRGB(100, 100, 130)
+MinBtn.TextSize = 11
+MinBtn.Font = Enum.Font.GothamSemibold
+MinBtn.BorderSizePixel = 0
+MinBtn.AutoButtonColor = false
+MinBtn.Parent = MainFrame
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 8)
+MinCorner.Parent = MinBtn
+
+local minimized = false
+MinBtn.Activated:Connect(function()
+    minimized = not minimized
+    if minimized then
+        MainFrame.Size = UDim2.new(0, 260, 0, 56)
+        MinBtn.Text = "↑ EXPAND"
+    else
+        MainFrame.Size = UDim2.new(0, 260, 0, 320)
+        MinBtn.Text = "— MINIMIZE"
+    end
+end)
+
+-- ─────────────────────────
+-- Drag (للموبايل)
+-- ─────────────────────────
+local dragStart, startPos
+Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        dragStart = input.Position
+        startPos = MainFrame.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch and dragStart then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+Header.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        dragStart = nil
+    end
+end)
+
+-- ─────────────────────────
+-- Watchdog: إعادة التطبيق
+-- ─────────────────────────
+RunService.Heartbeat:Connect(function()
+    if speedEnabled and hum and hum.WalkSpeed ~= AntiDetect.CurrentSpeed then
+        -- الماب حاول يرجع السرعة، أعدها بهدوء
+        local diff = AntiDetect.CurrentSpeed - hum.WalkSpeed
+        if math.abs(diff) > 2 then
+            hum.WalkSpeed = hum.WalkSpeed + (diff * 0.3)
+        else
+            hum.WalkSpeed = AntiDetect.CurrentSpeed
+        end
+    end
+end)
+
+print("[RideEggHub] Loaded — Delta Android Build")
