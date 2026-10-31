@@ -1,0 +1,544 @@
+--[[
+    Ride An Egg Hub v4
+    Delta Android - Raw Touch Only
+    No Activated / No MouseButton
+]]
+
+local Players   = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UIS       = game:GetService("UserInputService")
+
+local LP   = Players.LocalPlayer
+local Char = LP.Character or LP.CharacterAdded:Wait()
+local Hum  = Char:WaitForChild("Humanoid")
+
+LP.CharacterAdded:Connect(function(c)
+    Char = c
+    Hum  = c:WaitForChild("Humanoid")
+end)
+
+-- ══════════════════════════
+--  CONFIG
+-- ══════════════════════════
+local CFG = {
+    Enabled     = false,
+    TargetSpeed = 30,
+    MinSpeed    = 16,
+    MaxSpeed    = 80,
+}
+
+-- ══════════════════════════
+--  SPEED WATCHDOG
+-- ══════════════════════════
+RunService.Heartbeat:Connect(function()
+    if CFG.Enabled and Hum then
+        local diff = CFG.TargetSpeed - Hum.WalkSpeed
+        if math.abs(diff) > 0.5 then
+            Hum.WalkSpeed = Hum.WalkSpeed + diff * 0.2
+        else
+            Hum.WalkSpeed = CFG.TargetSpeed
+        end
+    end
+end)
+
+LP.CharacterAdded:Connect(function(c)
+    Char = c
+    Hum  = c:WaitForChild("Humanoid")
+    if CFG.Enabled then
+        task.wait(1.5)
+        Hum.WalkSpeed = CFG.TargetSpeed
+    end
+end)
+
+-- ══════════════════════════
+--  CLEANUP
+-- ══════════════════════════
+pcall(function()
+    game:GetService("CoreGui"):FindFirstChild("EggV4") and
+    game:GetService("CoreGui"):FindFirstChild("EggV4"):Destroy()
+end)
+pcall(function()
+    LP.PlayerGui:FindFirstChild("EggV4") and
+    LP.PlayerGui:FindFirstChild("EggV4"):Destroy()
+end)
+
+-- ══════════════════════════
+--  GUI ROOT
+-- ══════════════════════════
+local SG = Instance.new("ScreenGui")
+SG.Name           = "EggV4"
+SG.ResetOnSpawn   = false
+SG.IgnoreGuiInset = true
+SG.DisplayOrder   = 999
+
+pcall(function() SG.Parent = game:GetService("CoreGui") end)
+if SG.Parent ~= game:GetService("CoreGui") then
+    SG.Parent = LP.PlayerGui
+end
+
+-- ══════════════════════════
+--  HELPER: زاوية مستديرة
+-- ══════════════════════════
+local function corner(parent, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 10)
+    c.Parent = parent
+    return c
+end
+
+-- ══════════════════════════
+--  MAIN FRAME
+-- ══════════════════════════
+local Main = Instance.new("Frame")
+Main.Name             = "Main"
+Main.Size             = UDim2.new(0, 265, 0, 290)
+Main.Position         = UDim2.new(0, 20, 0, 120)
+Main.BackgroundColor3 = Color3.fromRGB(10, 10, 18)
+Main.BorderSizePixel  = 0
+Main.ZIndex           = 2
+Main.Parent           = SG
+corner(Main, 14)
+
+-- Purple border illusion
+local Bdr = Instance.new("Frame")
+Bdr.Size             = UDim2.new(1, 4, 1, 4)
+Bdr.Position         = UDim2.new(0, -2, 0, -2)
+Bdr.BackgroundColor3 = Color3.fromRGB(100, 50, 220)
+Bdr.BorderSizePixel  = 0
+Bdr.ZIndex           = 1
+Bdr.Parent           = Main
+corner(Bdr, 15)
+
+-- ══════════════════════════
+--  HEADER
+-- ══════════════════════════
+local Header = Instance.new("Frame")
+Header.Size             = UDim2.new(1, 0, 0, 50)
+Header.BackgroundColor3 = Color3.fromRGB(16, 16, 28)
+Header.BorderSizePixel  = 0
+Header.ZIndex           = 3
+Header.Parent           = Main
+corner(Header, 14)
+
+-- accent line
+local AL = Instance.new("Frame")
+AL.Size             = UDim2.new(1, 0, 0, 2)
+AL.Position         = UDim2.new(0, 0, 1, -2)
+AL.BackgroundColor3 = Color3.fromRGB(100, 50, 220)
+AL.BorderSizePixel  = 0
+AL.ZIndex           = 4
+AL.Parent           = Header
+
+local ALG = Instance.new("UIGradient")
+ALG.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(100, 50, 220)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 50, 220)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(220, 50, 150)),
+})
+ALG.Parent = AL
+
+local TitleL = Instance.new("TextLabel")
+TitleL.Size               = UDim2.new(1, -100, 0, 26)
+TitleL.Position           = UDim2.new(0, 14, 0, 6)
+TitleL.BackgroundTransparency = 1
+TitleL.Text               = "🥚  EGG HUB"
+TitleL.TextColor3         = Color3.fromRGB(255, 255, 255)
+TitleL.TextSize           = 15
+TitleL.Font               = Enum.Font.GothamBlack
+TitleL.TextXAlignment     = Enum.TextXAlignment.Left
+TitleL.ZIndex             = 4
+TitleL.Parent             = Header
+
+local SubL = Instance.new("TextLabel")
+SubL.Size               = UDim2.new(1, -100, 0, 14)
+SubL.Position           = UDim2.new(0, 14, 0, 32)
+SubL.BackgroundTransparency = 1
+SubL.Text               = "v4 • raw touch • delta"
+SubL.TextColor3         = Color3.fromRGB(100, 50, 220)
+SubL.TextSize           = 9
+SubL.Font               = Enum.Font.GothamSemibold
+SubL.TextXAlignment     = Enum.TextXAlignment.Left
+SubL.ZIndex             = 4
+SubL.Parent             = Header
+
+-- ── MIN BUTTON ─────────────────
+local MinBtn = Instance.new("Frame")
+MinBtn.Name             = "MinBtn"
+MinBtn.Size             = UDim2.new(0, 30, 0, 30)
+MinBtn.Position         = UDim2.new(1, -72, 0.5, -15)
+MinBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+MinBtn.BorderSizePixel  = 0
+MinBtn.ZIndex           = 5
+MinBtn.Parent           = Header
+corner(MinBtn, 8)
+
+local MinTxt = Instance.new("TextLabel")
+MinTxt.Size               = UDim2.new(1, 0, 1, 0)
+MinTxt.BackgroundTransparency = 1
+MinTxt.Text               = "−"
+MinTxt.TextColor3         = Color3.fromRGB(200, 200, 220)
+MinTxt.TextSize           = 18
+MinTxt.Font               = Enum.Font.GothamBold
+MinTxt.ZIndex             = 6
+MinTxt.Parent             = MinBtn
+
+-- ── CLOSE BUTTON ───────────────
+local CloseBtn = Instance.new("Frame")
+CloseBtn.Name             = "CloseBtn"
+CloseBtn.Size             = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position         = UDim2.new(1, -36, 0.5, -15)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(170, 35, 50)
+CloseBtn.BorderSizePixel  = 0
+CloseBtn.ZIndex           = 5
+CloseBtn.Parent           = Header
+corner(CloseBtn, 8)
+
+local CloseTxt = Instance.new("TextLabel")
+CloseTxt.Size               = UDim2.new(1, 0, 1, 0)
+CloseTxt.BackgroundTransparency = 1
+CloseTxt.Text               = "✕"
+CloseTxt.TextColor3         = Color3.fromRGB(255, 255, 255)
+CloseTxt.TextSize           = 13
+CloseTxt.Font               = Enum.Font.GothamBold
+CloseTxt.ZIndex             = 6
+CloseTxt.Parent             = CloseBtn
+
+-- ══════════════════════════
+--  BODY
+-- ══════════════════════════
+local Body = Instance.new("Frame")
+Body.Size             = UDim2.new(1, -24, 1, -62)
+Body.Position         = UDim2.new(0, 12, 0, 56)
+Body.BackgroundTransparency = 1
+Body.ZIndex           = 3
+Body.Parent           = Main
+
+-- ── STATUS ─────────────────────
+local StatRow = Instance.new("Frame")
+StatRow.Size             = UDim2.new(1, 0, 0, 38)
+StatRow.BackgroundColor3 = Color3.fromRGB(18, 18, 30)
+StatRow.BorderSizePixel  = 0
+StatRow.ZIndex           = 4
+StatRow.Parent           = Body
+corner(StatRow, 9)
+
+local Dot = Instance.new("Frame")
+Dot.Size             = UDim2.new(0, 9, 0, 9)
+Dot.Position         = UDim2.new(0, 12, 0.5, -4)
+Dot.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+Dot.BorderSizePixel  = 0
+Dot.ZIndex           = 5
+Dot.Parent           = StatRow
+corner(Dot, 999)
+
+local StatTxt = Instance.new("TextLabel")
+StatTxt.Size               = UDim2.new(1, -36, 1, 0)
+StatTxt.Position           = UDim2.new(0, 30, 0, 0)
+StatTxt.BackgroundTransparency = 1
+StatTxt.Text               = "OFFLINE  ·  16 studs/s"
+StatTxt.TextColor3         = Color3.fromRGB(140, 140, 160)
+StatTxt.TextSize           = 11
+StatTxt.Font               = Enum.Font.GothamSemibold
+StatTxt.TextXAlignment     = Enum.TextXAlignment.Left
+StatTxt.ZIndex             = 5
+StatTxt.Parent             = StatRow
+
+-- ── TOGGLE ─────────────────────
+local TogFrame = Instance.new("Frame")
+TogFrame.Size             = UDim2.new(1, 0, 0, 52)
+TogFrame.Position         = UDim2.new(0, 0, 0, 46)
+TogFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 34)
+TogFrame.BorderSizePixel  = 0
+TogFrame.ZIndex           = 4
+TogFrame.Parent           = Body
+corner(TogFrame, 11)
+
+local TIcon = Instance.new("TextLabel")
+TIcon.Size               = UDim2.new(0, 38, 1, 0)
+TIcon.Position           = UDim2.new(0, 6, 0, 0)
+TIcon.BackgroundTransparency = 1
+TIcon.Text               = "⚡"
+TIcon.TextSize           = 22
+TIcon.Font               = Enum.Font.GothamBold
+TIcon.ZIndex             = 5
+TIcon.Parent             = TogFrame
+
+local TLab = Instance.new("TextLabel")
+TLab.Size               = UDim2.new(1, -100, 1, 0)
+TLab.Position           = UDim2.new(0, 48, 0, 0)
+TLab.BackgroundTransparency = 1
+TLab.Text               = "SPEED BOOST"
+TLab.TextColor3         = Color3.fromRGB(200, 200, 220)
+TLab.TextSize           = 13
+TLab.Font               = Enum.Font.GothamBold
+TLab.TextXAlignment     = Enum.TextXAlignment.Left
+TLab.ZIndex             = 5
+TLab.Parent             = TogFrame
+
+local TBadge = Instance.new("Frame")
+TBadge.Size             = UDim2.new(0, 44, 0, 22)
+TBadge.Position         = UDim2.new(1, -52, 0.5, -11)
+TBadge.BackgroundColor3 = Color3.fromRGB(38, 38, 58)
+TBadge.BorderSizePixel  = 0
+TBadge.ZIndex           = 5
+TBadge.Parent           = TogFrame
+corner(TBadge, 6)
+
+local TBTxt = Instance.new("TextLabel")
+TBTxt.Size               = UDim2.new(1, 0, 1, 0)
+TBTxt.BackgroundTransparency = 1
+TBTxt.Text               = "OFF"
+TBTxt.TextColor3         = Color3.fromRGB(120, 120, 140)
+TBTxt.TextSize           = 10
+TBTxt.Font               = Enum.Font.GothamBold
+TBTxt.ZIndex             = 6
+TBTxt.Parent             = TBadge
+
+-- ── SLIDER BOX ─────────────────
+local SBox = Instance.new("Frame")
+SBox.Size             = UDim2.new(1, 0, 0, 78)
+SBox.Position         = UDim2.new(0, 0, 0, 106)
+SBox.BackgroundColor3 = Color3.fromRGB(16, 16, 26)
+SBox.BorderSizePixel  = 0
+SBox.ZIndex           = 4
+SBox.Parent           = Body
+corner(SBox, 10)
+
+local STitle = Instance.new("TextLabel")
+STitle.Size               = UDim2.new(0.6, 0, 0, 18)
+STitle.Position           = UDim2.new(0, 12, 0, 8)
+STitle.BackgroundTransparency = 1
+STitle.Text               = "SPEED"
+STitle.TextColor3         = Color3.fromRGB(100, 50, 220)
+STitle.TextSize           = 10
+STitle.Font               = Enum.Font.GothamBold
+STitle.TextXAlignment     = Enum.TextXAlignment.Left
+STitle.ZIndex             = 5
+STitle.Parent             = SBox
+
+local SNum = Instance.new("TextLabel")
+SNum.Size               = UDim2.new(0.35, 0, 0, 18)
+SNum.Position           = UDim2.new(0.65, -12, 0, 8)
+SNum.BackgroundTransparency = 1
+SNum.Text               = "30"
+SNum.TextColor3         = Color3.fromRGB(255, 255, 255)
+SNum.TextSize           = 14
+SNum.Font               = Enum.Font.GothamBlack
+SNum.TextXAlignment     = Enum.TextXAlignment.Right
+SNum.ZIndex             = 5
+SNum.Parent             = SBox
+
+local Track = Instance.new("Frame")
+Track.Size             = UDim2.new(1, -24, 0, 8)
+Track.Position         = UDim2.new(0, 12, 0, 34)
+Track.BackgroundColor3 = Color3.fromRGB(28, 28, 44)
+Track.BorderSizePixel  = 0
+Track.ZIndex           = 5
+Track.Parent           = SBox
+corner(Track, 999)
+
+local Fill = Instance.new("Frame")
+Fill.Size             = UDim2.new(0.22, 0, 1, 0)
+Fill.BackgroundColor3 = Color3.fromRGB(100, 50, 220)
+Fill.BorderSizePixel  = 0
+Fill.ZIndex           = 6
+Fill.Parent           = Track
+corner(Fill, 999)
+
+local FG = Instance.new("UIGradient")
+FG.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 50, 220)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 50, 160)),
+})
+FG.Parent = Fill
+
+local Handle = Instance.new("Frame")
+Handle.Size             = UDim2.new(0, 22, 0, 22)
+Handle.Position         = UDim2.new(0.22, -11, 0.5, -11)
+Handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Handle.BorderSizePixel  = 0
+Handle.ZIndex           = 7
+Handle.Parent           = Track
+corner(Handle, 999)
+
+local HIn = Instance.new("Frame")
+HIn.Size             = UDim2.new(0, 9, 0, 9)
+HIn.Position         = UDim2.new(0.5, -4, 0.5, -4)
+HIn.BackgroundColor3 = Color3.fromRGB(100, 50, 220)
+HIn.BorderSizePixel  = 0
+HIn.ZIndex           = 8
+HIn.Parent           = Handle
+corner(HIn, 999)
+
+local function mkMinMax(txt, x)
+    local l = Instance.new("TextLabel")
+    l.Size               = UDim2.new(0, 26, 0, 14)
+    l.Position           = UDim2.new(x, 0, 0, 56)
+    l.BackgroundTransparency = 1
+    l.Text               = txt
+    l.TextColor3         = Color3.fromRGB(60, 60, 80)
+    l.TextSize           = 9
+    l.Font               = Enum.Font.Gotham
+    l.ZIndex             = 5
+    l.Parent             = SBox
+end
+mkMinMax("16", 0)
+mkMinMax("80", 0.88)
+
+-- ══════════════════════════
+--  RAW TOUCH DETECTION
+--  كل الـ touch يمر من هنا
+-- ══════════════════════════
+local function getAbsRect(frame)
+    local p = frame.AbsolutePosition
+    local s = frame.AbsoluteSize
+    return {
+        x1 = p.X, y1 = p.Y,
+        x2 = p.X + s.X,
+        y2 = p.Y + s.Y
+    }
+end
+
+local function inside(rect, x, y)
+    return x >= rect.x1 and x <= rect.x2
+       and y >= rect.y1 and y <= rect.y2
+end
+
+-- State
+local dragActive  = false
+local dragStartV  = Vector2.new()
+local dragFrameP  = UDim2.new()
+local sliderActive = false
+local isMinimized = false
+
+-- ══════════════════════════
+--  TOGGLE VISUAL
+-- ══════════════════════════
+local function applyToggle()
+    if CFG.Enabled then
+        TBTxt.Text               = "ON"
+        TBTxt.TextColor3         = Color3.fromRGB(80, 255, 120)
+        TBadge.BackgroundColor3  = Color3.fromRGB(15, 45, 22)
+        TLab.TextColor3          = Color3.fromRGB(80, 255, 120)
+        Dot.BackgroundColor3     = Color3.fromRGB(80, 255, 120)
+        StatTxt.Text             = "ACTIVE  ·  "..CFG.TargetSpeed.." studs/s"
+        TweenService:Create(TogFrame, TweenInfo.new(0.15), {
+            BackgroundColor3 = Color3.fromRGB(14, 36, 18)
+        }):Play()
+    else
+        TBTxt.Text               = "OFF"
+        TBTxt.TextColor3         = Color3.fromRGB(120, 120, 140)
+        TBadge.BackgroundColor3  = Color3.fromRGB(38, 38, 58)
+        TLab.TextColor3          = Color3.fromRGB(200, 200, 220)
+        Dot.BackgroundColor3     = Color3.fromRGB(70, 70, 90)
+        StatTxt.Text             = "OFFLINE  ·  16 studs/s"
+        TweenService:Create(TogFrame, TweenInfo.new(0.15), {
+            BackgroundColor3 = Color3.fromRGB(20, 20, 34)
+        }):Play()
+        if Hum then Hum.WalkSpeed = 16 end
+    end
+end
+
+-- ══════════════════════════
+--  SLIDER CALC
+-- ══════════════════════════
+local function calcSlider(touchX)
+    local tX  = Track.AbsolutePosition.X
+    local tW  = Track.AbsoluteSize.X
+    if tW == 0 then return end
+    local rel = math.clamp((touchX - tX) / tW, 0, 1)
+    Fill.Size       = UDim2.new(rel, 0, 1, 0)
+    Handle.Position = UDim2.new(rel, -11, 0.5, -11)
+    local spd = math.floor(CFG.MinSpeed + rel * (CFG.MaxSpeed - CFG.MinSpeed))
+    CFG.TargetSpeed = spd
+    SNum.Text       = tostring(spd)
+    if CFG.Enabled then
+        StatTxt.Text = "ACTIVE  ·  "..spd.." studs/s"
+    end
+end
+
+-- ══════════════════════════
+--  TOUCH BEGAN
+-- ══════════════════════════
+UIS.TouchStarted:Connect(function(touch, _gameProc)
+    local x, y = touch.Position.X, touch.Position.Y
+
+    -- CLOSE
+    local cr = getAbsRect(CloseBtn)
+    if inside(cr, x, y) then
+        CFG.Enabled = false
+        if Hum then Hum.WalkSpeed = 16 end
+        SG:Destroy()
+        return
+    end
+
+    -- MINIMIZE
+    local mr = getAbsRect(MinBtn)
+    if inside(mr, x, y) then
+        isMinimized = not isMinimized
+        TweenService:Create(Main, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+            Size = isMinimized
+                and UDim2.new(0, 265, 0, 50)
+                or  UDim2.new(0, 265, 0, 290)
+        }):Play()
+        MinTxt.Text = isMinimized and "□" or "−"
+        return
+    end
+
+    -- TOGGLE
+    local tr = getAbsRect(TogFrame)
+    if inside(tr, x, y) then
+        CFG.Enabled = not CFG.Enabled
+        applyToggle()
+        return
+    end
+
+    -- SLIDER (Track + Handle منطقة موسعة)
+    local sr = getAbsRect(SBox)
+    if inside(sr, x, y) then
+        sliderActive = true
+        calcSlider(x)
+        return
+    end
+
+    -- DRAG (Header)
+    local hr = getAbsRect(Header)
+    if inside(hr, x, y) then
+        dragActive  = true
+        dragStartV  = Vector2.new(x, y)
+        dragFrameP  = Main.Position
+        return
+    end
+end)
+
+-- ══════════════════════════
+--  TOUCH MOVED
+-- ══════════════════════════
+UIS.TouchMoved:Connect(function(touch, _)
+    local x, y = touch.Position.X, touch.Position.Y
+
+    if sliderActive then
+        calcSlider(x)
+        return
+    end
+
+    if dragActive then
+        local dx = x - dragStartV.X
+        local dy = y - dragStartV.Y
+        Main.Position = UDim2.new(
+            dragFrameP.X.Scale, dragFrameP.X.Offset + dx,
+            dragFrameP.Y.Scale, dragFrameP.Y.Offset + dy
+        )
+    end
+end)
+
+-- ══════════════════════════
+--  TOUCH ENDED
+-- ══════════════════════════
+UIS.TouchEnded:Connect(function(_, _)
+    dragActive   = false
+    sliderActive = false
+end)
+
+print("[EggHub v4] Raw Touch — loaded")
