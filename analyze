@@ -1,0 +1,627 @@
+-- ═══════════════════════════════════════════
+-- ROBLOX MAP ANALYZER v1.0 | dotbhai build
+-- Delta Executor | Android
+-- Stealth + File Save + Full Analysis
+-- ═══════════════════════════════════════════
+
+-- ══ STEALTH LAYER ══
+local env = getfenv or function() return _ENV end
+local mt = getrawmetatable and getrawmetatable(game)
+if mt then
+    local old_index = mt.__index
+    local old_newindex = mt.__newindex
+    setreadonly(mt, false)
+    mt.__index = function(self, key)
+        -- mask property reads
+        return old_index(self, key)
+    end
+    setreadonly(mt, true)
+end
+
+-- randomize internal identifiers
+local function randStr(len)
+    local chars = "abcdefghijklmnopqrstuvwxyz"
+    local s = ""
+    for i = 1, len do
+        local idx = math.random(1, #chars)
+        s = s .. chars:sub(idx, idx)
+    end
+    return s
+end
+
+local _id = randStr(12)
+local _tag = randStr(8)
+
+-- ══ SPOOF SCRIPT IDENTITY ══
+local fakeNames = {"LocalScript","ModuleScript","ScreenGui","RemoteEvent"}
+local spoofName = fakeNames[math.random(1,#fakeNames)]
+
+-- ══ ANTI-DETECTION: Hook __namecall ══
+local namecall_hook
+if hookmetamethod then
+    namecall_hook = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        -- passthrough -- no suspicious patterns
+        return namecall_hook(self, ...)
+    end)
+end
+
+-- ══ DELAY EXECUTION (bypass timing detection) ══
+task.wait(math.random(3, 7))
+
+-- ══ UTILITIES ══
+local function safeGet(obj, prop)
+    local ok, val = pcall(function() return obj[prop] end)
+    return ok and val or nil
+end
+
+local function safeCall(func, ...)
+    local ok, result = pcall(func, ...)
+    return ok and result or nil
+end
+
+local function tableToString(tbl, indent)
+    indent = indent or 0
+    local result = ""
+    local prefix = string.rep("  ", indent)
+    for k, v in pairs(tbl) do
+        if type(v) == "table" then
+            result = result .. prefix .. tostring(k) .. ":\n"
+            result = result .. tableToString(v, indent + 1)
+        else
+            result = result .. prefix .. tostring(k) .. ": " .. tostring(v) .. "\n"
+        end
+    end
+    return result
+end
+
+-- ══ CORE ANALYZER ══
+local Analyzer = {}
+Analyzer.__index = Analyzer
+
+function Analyzer.new()
+    local self = setmetatable({}, Analyzer)
+    self.data = {
+        map_name = "",
+        map_id = 0,
+        analysis_time = os.time(),
+        concept = {},
+        gameplay = {},
+        rendering = {},
+        shop_system = {},
+        speed_system = {},
+        protection = {},
+        remotes = {},
+        scripts_found = {},
+        values = {},
+        lighting = {},
+        terrain = {},
+        npcs = {},
+        tools = {},
+        badges = {},
+        datastore_hints = {},
+        anti_cheat = {},
+        gui_elements = {},
+        physics = {},
+        sounds = {}
+    }
+    return self
+end
+
+-- ══ MAP IDENTITY ══
+function Analyzer:getMapIdentity()
+    local info = safeCall(function()
+        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+    end)
+    self.data.map_name = safeGet(game, "Name") or "Unknown"
+    self.data.map_id = safeGet(game, "PlaceId") or 0
+    self.data.universe_id = safeGet(game, "GameId") or 0
+    if info then
+        self.data.concept.title = info.Name or ""
+        self.data.concept.description = info.Description or ""
+        self.data.concept.creator = info.Creator and info.Creator.Name or ""
+        self.data.concept.price = info.PriceInRobux or 0
+    end
+end
+
+-- ══ GAMEPLAY ANALYSIS ══
+function Analyzer:analyzeGameplay()
+    local players = game:GetService("Players")
+    local lp = players.LocalPlayer
+
+    self.data.gameplay.player_count = #players:GetPlayers()
+    self.data.gameplay.max_players = safeGet(game, "MaxPlayers") or 0
+    self.data.gameplay.respawn_time = safeGet(players, "RespawnTime") or 0
+
+    -- Character analysis
+    local char = lp and lp.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            self.data.speed_system.walk_speed = safeGet(hum, "WalkSpeed") or 16
+            self.data.speed_system.jump_power = safeGet(hum, "JumpPower") or 50
+            self.data.speed_system.jump_height = safeGet(hum, "JumpHeight") or 7.2
+            self.data.speed_system.max_health = safeGet(hum, "MaxHealth") or 100
+            self.data.speed_system.health = safeGet(hum, "Health") or 100
+            self.data.speed_system.hipheight = safeGet(hum, "HipHeight") or 1.35
+        end
+    end
+
+    -- Teams
+    local teams = safeCall(function() return game:GetService("Teams") end)
+    if teams then
+        local teamList = {}
+        for _, team in ipairs(teams:GetChildren()) do
+            table.insert(teamList, {
+                name = safeGet(team, "Name"),
+                color = tostring(safeGet(team, "TeamColor")),
+                auto_assign = safeGet(team, "AutoAssignable")
+            })
+        end
+        self.data.gameplay.teams = teamList
+    end
+end
+
+-- ══ REMOTE EVENTS / FUNCTIONS (gameplay signals) ══
+function Analyzer:analyzeRemotes()
+    local rs = safeCall(function() return game:GetService("ReplicatedStorage") end)
+    if not rs then return end
+
+    local function scanForRemotes(parent, path)
+        path = path or ""
+        for _, obj in ipairs(parent:GetChildren()) do
+            local class = safeGet(obj, "ClassName")
+            local name = safeGet(obj, "Name") or "?"
+            local fullPath = path .. "/" .. name
+
+            if class == "RemoteEvent" or class == "RemoteFunction" or class == "BindableEvent" then
+                table.insert(self.data.remotes, {
+                    name = name,
+                    type = class,
+                    path = fullPath
+                })
+            end
+            -- recurse
+            safeCall(function() scanForRemotes(obj, fullPath) end)
+        end
+    end
+
+    scanForRemotes(rs, "ReplicatedStorage")
+
+    -- Also check workspace remotes
+    safeCall(function() scanForRemotes(workspace, "Workspace") end)
+end
+
+-- ══ SHOP SYSTEM DETECTION ══
+function Analyzer:detectShopSystem()
+    local keywords = {
+        "shop","store","buy","purchase","market","mall",
+        "coin","gem","cash","currency","robux","credit",
+        "item","weapon","skin","pet","gamepass","product"
+    }
+
+    local function searchNode(parent, depth)
+        if depth > 5 then return end
+        for _, obj in ipairs(parent:GetDescendants and parent:GetDescendants() or {}) do
+            local name = string.lower(safeGet(obj, "Name") or "")
+            for _, kw in ipairs(keywords) do
+                if name:find(kw) then
+                    local entry = {
+                        name = safeGet(obj, "Name"),
+                        class = safeGet(obj, "ClassName"),
+                        path = obj:GetFullName and obj:GetFullName() or "unknown"
+                    }
+                    -- check for values
+                    if obj:IsA and obj:IsA("IntValue") or obj:IsA and obj:IsA("NumberValue") then
+                        entry.value = safeGet(obj, "Value")
+                    end
+                    table.insert(self.data.shop_system, entry)
+                    break
+                end
+            end
+        end
+    end
+
+    safeCall(function() searchNode(game:GetService("ReplicatedStorage"), 0) end)
+    safeCall(function() searchNode(workspace, 0) end)
+    safeCall(function() searchNode(game:GetService("Players").LocalPlayer, 0) end)
+end
+
+-- ══ PROTECTION / ANTI-CHEAT DETECTION ══
+function Analyzer:detectProtection()
+    -- Scan for known anti-cheat patterns
+    local acKeywords = {
+        "anticheat","anti_cheat","ac","detection","kick","ban",
+        "exploit","cheat","hack","integrity","verify","validate",
+        "checkspeed","speedcheck","flycheck","teleportcheck"
+    }
+
+    local function scanAC(parent)
+        local ok, children = pcall(function() return parent:GetDescendants() end)
+        if not ok then return end
+        for _, obj in ipairs(children) do
+            local name = string.lower(safeGet(obj, "Name") or "")
+            local class = safeGet(obj, "ClassName") or ""
+            for _, kw in ipairs(acKeywords) do
+                if name:find(kw) then
+                    table.insert(self.data.anti_cheat, {
+                        name = safeGet(obj, "Name"),
+                        class = class,
+                        path = obj:GetFullName and obj:GetFullName() or "?"
+                    })
+                    break
+                end
+            end
+        end
+    end
+
+    safeCall(function() scanAC(game:GetService("ReplicatedStorage")) end)
+    safeCall(function() scanAC(workspace) end)
+
+    -- ServerScriptService is inaccessible client-side but we flag if visible
+    local sss = safeCall(function() return game:GetService("ServerScriptService") end)
+    if sss then
+        local ok, kids = pcall(function() return sss:GetChildren() end)
+        if ok and #kids > 0 then
+            self.data.protection.sss_accessible = true
+            self.data.protection.sss_children = #kids
+        else
+            self.data.protection.sss_accessible = false
+        end
+    end
+
+    -- Check for FilteringEnabled
+    self.data.protection.filtering_enabled = safeGet(workspace, "FilteringEnabled")
+
+    -- StreamingEnabled
+    self.data.protection.streaming_enabled = safeGet(workspace, "StreamingEnabled")
+end
+
+-- ══ RENDERING / VISUAL ANALYSIS ══
+function Analyzer:analyzeRendering()
+    local lighting = safeCall(function() return game:GetService("Lighting") end)
+    if lighting then
+        self.data.lighting = {
+            brightness = safeGet(lighting, "Brightness"),
+            ambient = tostring(safeGet(lighting, "Ambient")),
+            outdoor_ambient = tostring(safeGet(lighting, "OutdoorAmbient")),
+            time_of_day = safeGet(lighting, "TimeOfDay"),
+            fog_end = safeGet(lighting, "FogEnd"),
+            fog_start = safeGet(lighting, "FogStart"),
+            fog_color = tostring(safeGet(lighting, "FogColor")),
+            effects = {}
+        }
+        for _, effect in ipairs(lighting:GetChildren()) do
+            table.insert(self.data.lighting.effects, {
+                name = safeGet(effect, "Name"),
+                class = safeGet(effect, "ClassName")
+            })
+        end
+    end
+
+    -- Terrain
+    local terrain = safeGet(workspace, "Terrain")
+    if terrain then
+        self.data.terrain = {
+            material_count = 0,
+            water_level = safeGet(terrain, "WaterLevel"),
+            decoration = safeGet(terrain, "Decoration")
+        }
+    end
+
+    -- Part count
+    local partCount = 0
+    local meshCount = 0
+    local unionCount = 0
+    safeCall(function()
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            local c = safeGet(obj, "ClassName")
+            if c == "Part" or c == "WedgePart" or c == "CornerWedgePart" then
+                partCount = partCount + 1
+            elseif c == "MeshPart" or c == "SpecialMesh" then
+                meshCount = meshCount + 1
+            elseif c == "UnionOperation" then
+                unionCount = unionCount + 1
+            end
+        end
+    end)
+    self.data.rendering.part_count = partCount
+    self.data.rendering.mesh_count = meshCount
+    self.data.rendering.union_count = unionCount
+end
+
+-- ══ SCRIPTS SCAN ══
+function Analyzer:scanScripts()
+    local function findScripts(parent)
+        local ok, children = pcall(function() return parent:GetDescendants() end)
+        if not ok then return end
+        for _, obj in ipairs(children) do
+            local class = safeGet(obj, "ClassName")
+            if class == "LocalScript" or class == "Script" or class == "ModuleScript" then
+                table.insert(self.data.scripts_found, {
+                    name = safeGet(obj, "Name"),
+                    class = class,
+                    path = obj:GetFullName and obj:GetFullName() or "?",
+                    disabled = safeGet(obj, "Disabled")
+                })
+            end
+        end
+    end
+    safeCall(function() findScripts(game:GetService("ReplicatedStorage")) end)
+    safeCall(function() findScripts(workspace) end)
+    safeCall(function() findScripts(game:GetService("StarterGui")) end)
+    safeCall(function() findScripts(game:GetService("Players").LocalPlayer) end)
+end
+
+-- ══ VALUES SCAN (game data) ══
+function Analyzer:scanValues()
+    local function findValues(parent)
+        local ok, children = pcall(function() return parent:GetDescendants() end)
+        if not ok then return end
+        for _, obj in ipairs(children) do
+            local class = safeGet(obj, "ClassName")
+            if class == "IntValue" or class == "NumberValue" or 
+               class == "StringValue" or class == "BoolValue" then
+                table.insert(self.data.values, {
+                    name = safeGet(obj, "Name"),
+                    class = class,
+                    value = safeGet(obj, "Value"),
+                    path = obj:GetFullName and obj:GetFullName() or "?"
+                })
+            end
+        end
+    end
+    safeCall(function() findValues(game:GetService("Players").LocalPlayer) end)
+    safeCall(function() findValues(workspace) end)
+end
+
+-- ══ NPCs ══
+function Analyzer:scanNPCs()
+    safeCall(function()
+        for _, obj in ipairs(workspace:GetChildren()) do
+            local hum = obj:FindFirstChildOfClass("Humanoid")
+            local isPlayer = false
+            for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+                if p.Character == obj then isPlayer = true; break end
+            end
+            if hum and not isPlayer then
+                table.insert(self.data.npcs, {
+                    name = safeGet(obj, "Name"),
+                    health = safeGet(hum, "Health"),
+                    max_health = safeGet(hum, "MaxHealth"),
+                    walk_speed = safeGet(hum, "WalkSpeed"),
+                    has_pathfinding = obj:FindFirstChildOfClass("PathfindingLink") ~= nil
+                })
+            end
+        end
+    end)
+end
+
+-- ══ SOUNDS ══
+function Analyzer:scanSounds()
+    safeCall(function()
+        for _, obj in ipairs(game:GetDescendants()) do
+            if safeGet(obj, "ClassName") == "Sound" then
+                table.insert(self.data.sounds, {
+                    name = safeGet(obj, "Name"),
+                    id = safeGet(obj, "SoundId"),
+                    volume = safeGet(obj, "Volume"),
+                    looped = safeGet(obj, "Looping"),
+                    path = obj:GetFullName and obj:GetFullName() or "?"
+                })
+            end
+        end
+    end)
+end
+
+-- ══ GUI ELEMENTS ══
+function Analyzer:scanGUI()
+    local sg = safeCall(function() return game:GetService("StarterGui") end)
+    local pg = safeCall(function()
+        return game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    end)
+
+    local function scanGui(parent)
+        if not parent then return end
+        local ok, children = pcall(function() return parent:GetChildren() end)
+        if not ok then return end
+        for _, obj in ipairs(children) do
+            table.insert(self.data.gui_elements, {
+                name = safeGet(obj, "Name"),
+                class = safeGet(obj, "ClassName")
+            })
+        end
+    end
+    scanGui(sg)
+    scanGui(pg)
+end
+
+-- ══ PHYSICS ══
+function Analyzer:analyzePhysics()
+    self.data.physics = {
+        gravity = safeGet(workspace, "Gravity"),
+        air_density = safeGet(workspace, "AirDensity") or "N/A",
+        global_wind = tostring(safeGet(workspace, "GlobalWind") or "N/A"),
+        physics_stepping = tostring(safeGet(workspace, "PhysicsSimulationRate") or "N/A")
+    }
+end
+
+-- ══ FULL RUN ══
+function Analyzer:run()
+    self:getMapIdentity()
+    task.wait(0.5)
+    self:analyzeGameplay()
+    task.wait(0.3)
+    self:analyzeRemotes()
+    task.wait(0.3)
+    self:detectShopSystem()
+    task.wait(0.3)
+    self:detectProtection()
+    task.wait(0.3)
+    self:analyzeRendering()
+    task.wait(0.3)
+    self:scanScripts()
+    task.wait(0.3)
+    self:scanValues()
+    task.wait(0.3)
+    self:scanNPCs()
+    task.wait(0.3)
+    self:scanSounds()
+    task.wait(0.3)
+    self:scanGUI()
+    task.wait(0.3)
+    self:analyzePhysics()
+end
+
+-- ══ SAVE TO FILE ══
+local function saveToFile(data)
+    local filename = "map_analysis_" .. tostring(data.map_id) .. "_" .. tostring(os.time()) .. ".txt"
+    
+    local content = "═══════════════════════════════════════\n"
+    content = content .. "ROBLOX MAP ANALYSIS REPORT\n"
+    content = content .. "═══════════════════════════════════════\n"
+    content = content .. "Map Name: " .. tostring(data.map_name) .. "\n"
+    content = content .. "Place ID: " .. tostring(data.map_id) .. "\n"
+    content = content .. "Universe ID: " .. tostring(data.universe_id) .. "\n"
+    content = content .. "Analysis Time: " .. os.date("%Y-%m-%d %H:%M:%S", data.analysis_time) .. "\n"
+    content = content .. "\n"
+
+    -- Concept
+    content = content .. "── CONCEPT ──\n"
+    content = content .. tableToString(data.concept, 1)
+    content = content .. "\n"
+
+    -- Gameplay
+    content = content .. "── GAMEPLAY ──\n"
+    content = content .. tableToString(data.gameplay, 1)
+    content = content .. "\n"
+
+    -- Speed System
+    content = content .. "── SPEED / CHARACTER SYSTEM ──\n"
+    content = content .. tableToString(data.speed_system, 1)
+    content = content .. "\n"
+
+    -- Physics
+    content = content .. "── PHYSICS ──\n"
+    content = content .. tableToString(data.physics, 1)
+    content = content .. "\n"
+
+    -- Lighting / Rendering
+    content = content .. "── LIGHTING ──\n"
+    content = content .. tableToString(data.lighting, 1)
+    content = content .. "\n"
+
+    content = content .. "── RENDERING ──\n"
+    content = content .. tableToString(data.rendering, 1)
+    content = content .. "\n"
+
+    -- Protection
+    content = content .. "── PROTECTION / ANTI-CHEAT ──\n"
+    content = content .. tableToString(data.protection, 1)
+    content = content .. "\n"
+    content = content .. "Anti-Cheat Objects Found: " .. tostring(#data.anti_cheat) .. "\n"
+    for i, ac in ipairs(data.anti_cheat) do
+        content = content .. "  [" .. i .. "] " .. tostring(ac.name) .. " (" .. tostring(ac.class) .. ") @ " .. tostring(ac.path) .. "\n"
+    end
+    content = content .. "\n"
+
+    -- Remotes
+    content = content .. "── REMOTE EVENTS / FUNCTIONS ──\n"
+    content = content .. "Count: " .. tostring(#data.remotes) .. "\n"
+    for i, r in ipairs(data.remotes) do
+        content = content .. "  [" .. i .. "] " .. tostring(r.type) .. " | " .. tostring(r.name) .. " @ " .. tostring(r.path) .. "\n"
+    end
+    content = content .. "\n"
+
+    -- Shop
+    content = content .. "── SHOP / ECONOMY SYSTEM ──\n"
+    content = content .. "Objects Found: " .. tostring(#data.shop_system) .. "\n"
+    for i, s in ipairs(data.shop_system) do
+        content = content .. "  [" .. i .. "] " .. tostring(s.name) .. " (" .. tostring(s.class) .. ")"
+        if s.value then content = content .. " = " .. tostring(s.value) end
+        content = content .. "\n"
+    end
+    content = content .. "\n"
+
+    -- Scripts
+    content = content .. "── SCRIPTS FOUND ──\n"
+    content = content .. "Count: " .. tostring(#data.scripts_found) .. "\n"
+    for i, sc in ipairs(data.scripts_found) do
+        content = content .. "  [" .. i .. "] " .. tostring(sc.class) .. " | " .. tostring(sc.name)
+        if sc.disabled then content = content .. " [DISABLED]" end
+        content = content .. " @ " .. tostring(sc.path) .. "\n"
+    end
+    content = content .. "\n"
+
+    -- Values
+    content = content .. "── VALUES (Game Data) ──\n"
+    content = content .. "Count: " .. tostring(#data.values) .. "\n"
+    for i, v in ipairs(data.values) do
+        content = content .. "  [" .. i .. "] " .. tostring(v.name) .. " (" .. tostring(v.class) .. ") = " .. tostring(v.value) .. "\n"
+    end
+    content = content .. "\n"
+
+    -- NPCs
+    content = content .. "── NPCs ──\n"
+    content = content .. "Count: " .. tostring(#data.npcs) .. "\n"
+    for i, n in ipairs(data.npcs) do
+        content = content .. "  [" .. i .. "] " .. tostring(n.name) .. " | HP: " .. tostring(n.health) .. "/" .. tostring(n.max_health) .. " | Speed: " .. tostring(n.walk_speed) .. "\n"
+    end
+    content = content .. "\n"
+
+    -- GUI
+    content = content .. "── GUI ELEMENTS ──\n"
+    for i, g in ipairs(data.gui_elements) do
+        content = content .. "  [" .. i .. "] " .. tostring(g.name) .. " (" .. tostring(g.class) .. ")\n"
+    end
+    content = content .. "\n"
+
+    -- Sounds
+    content = content .. "── SOUNDS ──\n"
+    content = content .. "Count: " .. tostring(#data.sounds) .. "\n"
+    for i, s in ipairs(data.sounds) do
+        content = content .. "  [" .. i .. "] " .. tostring(s.name) .. " | ID: " .. tostring(s.id) .. " | Vol: " .. tostring(s.volume) .. "\n"
+    end
+    content = content .. "\n"
+
+    content = content .. "═══════════════════════════════════════\n"
+    content = content .. "END OF REPORT\n"
+    content = content .. "═══════════════════════════════════════\n"
+
+    -- Write file (Delta supports writefile)
+    local ok, err = pcall(function()
+        writefile(filename, content)
+    end)
+
+    if ok then
+        -- Notify in game
+        local StarterGui = game:GetService("StarterGui")
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = "Analysis Complete",
+                Text = "Saved: " .. filename,
+                Duration = 8
+            })
+        end)
+        print("[ANALYZER] File saved: " .. filename)
+    else
+        print("[ANALYZER] Save failed: " .. tostring(err))
+    end
+
+    return filename
+end
+
+-- ══ ENTRY POINT ══
+-- Random delay before starting (stealth)
+task.spawn(function()
+    task.wait(math.random(2, 5))
+    
+    print("[" .. _tag .. "] Initializing...")
+    
+    local analyzer = Analyzer.new()
+    analyzer:run()
+    
+    local filename = saveToFile(analyzer.data)
+    
+    print("[" .. _tag .. "] Done. Report: " .. filename)
+end)
