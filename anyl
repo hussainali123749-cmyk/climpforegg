@@ -1,0 +1,21 @@
+task.wait(3)
+local r = {}
+pcall(function()
+    for _,v in pairs(game.Players.LocalPlayer.PlayerGui:GetDescendants()) do
+        table.insert(r, v.Name.."|||"..v.ClassName.."|||"..v:GetFullName())
+    end
+end)
+pcall(function()
+    for _,v in pairs(workspace:GetDescendants()) do
+        if v:IsA("BasePart") or v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+            table.insert(r, v.Name.."|||"..v.ClassName.."|||"..v:GetFullName())
+        end
+    end
+end)
+pcall(function()
+    for _,v in pairs(game.ReplicatedStorage:GetDescendants()) do
+        table.insert(r, v.Name.."|||"..v.ClassName.."|||"..v:GetFullName())
+    end
+end)
+local txt = table.concat(r,"\n")
+writefile("/storage/emulated/0/Android/data/com.roblox.client/files/gloop/external/scan.txt", txt)
