@@ -1,0 +1,39 @@
+-- Anti-detection: تأخير عشوائي عند التشغيل
+task.wait(math.random(2, 5))
+
+-- تشغيل في بيئة محمية
+local success, err = pcall(function()
+
+    local HttpService = game:GetService("HttpService")
+    local results = {}
+
+    -- GUI scan
+    for _, v in pairs(game.Players.LocalPlayer.PlayerGui:GetDescendants()) do
+        if v:IsA("Frame") or v:IsA("TextLabel") or v:IsA("ImageLabel") or v:IsA("TextButton") or v:IsA("BillboardGui") then
+            table.insert(results, v.Name .. " | " .. v.ClassName .. " | " .. v:GetFullName())
+        end
+    end
+
+    -- Workspace scan
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("BasePart") or v:IsA("RemoteEvent") or v:IsA("RemoteFunction") or v:IsA("Script") or v:IsA("LocalScript") then
+            table.insert(results, v.Name .. " | " .. v.ClassName .. " | " .. v:GetFullName())
+        end
+    end
+
+    -- ReplicatedStorage scan (مهم جداً للـ RemoteEvents)
+    for _, v in pairs(game.ReplicatedStorage:GetDescendants()) do
+        table.insert(results, v.Name .. " | " .. v.ClassName .. " | " .. v:GetFullName())
+    end
+
+    local finalText = table.concat(results, "\n")
+
+    -- حفظ الملف
+    writefile("scan_result.txt", finalText)
+    print("[DONE] تم الحفظ - عدد العناصر: " .. #results)
+
+end)
+
+if not success then
+    print("[ERROR] " .. tostring(err))
+end
